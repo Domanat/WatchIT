@@ -134,7 +134,7 @@ class _YoutubeAppDemoState extends State<YoutubeAppDemo> {
     // Add random number to get id from list
     while (true) {
       int randomNumber = Random().nextInt(videoNames.length);
-      String currentVideoName = "${videoNames[randomNumber]} трейлер на русском";
+      String currentVideoName = "${videoNames[randomNumber]} трейлер русский";
 
       currentVideoUrl = await getVideoUrl(currentVideoName);
 
