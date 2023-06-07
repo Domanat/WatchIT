@@ -54,7 +54,7 @@ class YoutubeAppDemo extends StatefulWidget {
 
 class _YoutubeAppDemoState extends State<YoutubeAppDemo> {
   late YoutubePlayerController controller;
-  String currentVideoId = "";
+  String currentVideoUrl = "";
   List<String> videoNames = [];
   final List<String> videoUrls = [];
   bool isVideoReady = false;
@@ -65,12 +65,17 @@ class _YoutubeAppDemoState extends State<YoutubeAppDemo> {
 
   Future<bool> isVideoRestricted() async {
     final url =
-      'https://www.googleapis.com/youtube/v3/videos?id=$currentVideoId&part=contentDetails&key=$apiKey';
+      'https://www.googleapis.com/youtube/v3/videos?id=$currentVideoUrl&part=contentDetails&key=$apiKey';
 
     final response = await http.get(Uri.parse(url));
     final jsonBody = json.decode(response.body);
     print(jsonBody);
-    return jsonBody['items'][0]['contentDetails']['contentRating'].isEmpty;
+    // CONTENT DETAILS MAYBE EMPTY
+    if (jsonBody['items'].isEmpty || jsonBody['items'][0]['contentDetails'].isEmpty || jsonBody['items'][0]['contentDetails']['contentRating'].isEmpty) {
+      return false;
+    }
+
+    return true;
   }
 
   Future<void> getNamesFromExcel() async {
@@ -114,33 +119,37 @@ class _YoutubeAppDemoState extends State<YoutubeAppDemo> {
   Future<void> initVideoIds() async {
     // Make request to database and fill videoNames list
     await getNamesFromExcel();
-    // Make request to youtube and extract video urls
+  }
 
-    for (var video in videoNames) {
-      video += " трейлер на русском";
-      List<YouTubeVideo> videoResult = await uApi.search(video);
-      videoUrls.add(videoResult[0].url);
-      print(videoResult[0].url);
+  Future<String> getVideoUrl(String videoName) async {
+    List<YouTubeVideo> videoResult = await uApi.search(videoName);
+    
+    if (videoResult.isNotEmpty) {
+      return videoResult[0].url;
     }
-
-    print("VideoUrls size: ${videoUrls.length}");
+    return "";
   }
 
   Future<void> nextVideo() async {
     // Add random number to get id from list
-    Random random = Random();
-
     while (true) {
-      int randomNumber = random.nextInt(videoUrls.length);
-      currentVideoId = videoUrls[randomNumber];
+      int randomNumber = Random().nextInt(videoNames.length);
+      String currentVideoName = "${videoNames[randomNumber]} трейлер на русском";
 
+      currentVideoUrl = await getVideoUrl(currentVideoName);
+
+      if (currentVideoUrl.isEmpty) {
+        print("currentVideoUrl is empty! Name: $currentVideoName");
+        continue;
+      }
+      
       //check if video is ok
       if (!await isVideoRestricted()) {
         break;
       }
     }
 
-    controller.loadVideo(currentVideoId);
+    controller.loadVideo(currentVideoUrl);
 
     setState(() {
       print("Set new video");
@@ -148,11 +157,11 @@ class _YoutubeAppDemoState extends State<YoutubeAppDemo> {
   }
 
   void addFavorite() {
-    print("Video $currentVideoId favorite");
+    print("Video $currentVideoUrl favorite");
   }
 
   void addUnfavorite() {
-    print("Video $currentVideoId unfavorite");
+    print("Video $currentVideoUrl unfavorite");
   }
 
   Future<void> loadData() async {
@@ -164,9 +173,13 @@ class _YoutubeAppDemoState extends State<YoutubeAppDemo> {
           loop: false),
     );
 
+    // Fill video urls using names from database file
     await initVideoIds();
 
+    // Try to load a random video from list and CHECK its restrictions
+    // If there's any, choose next video
     await nextVideo();
+
     //Remove loading screen
     FlutterNativeSplash.remove();
   }
