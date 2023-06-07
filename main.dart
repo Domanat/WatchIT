@@ -60,18 +60,20 @@ class _YoutubeAppDemoState extends State<YoutubeAppDemo> {
   bool isVideoReady = false;
   List<String> favorites = [];
   List<String> unfavorites = [];
-  
+
   YoutubeAPI uApi = YoutubeAPI(apiKey);
 
   Future<bool> isVideoRestricted() async {
     final url =
-      'https://www.googleapis.com/youtube/v3/videos?id=$currentVideoUrl&part=contentDetails&key=$apiKey';
+        'https://www.googleapis.com/youtube/v3/videos?id=$currentVideoUrl&part=contentDetails&key=$apiKey';
 
     final response = await http.get(Uri.parse(url));
     final jsonBody = json.decode(response.body);
     print(jsonBody);
     // CONTENT DETAILS MAYBE EMPTY
-    if (jsonBody['items'].isEmpty || jsonBody['items'][0]['contentDetails'].isEmpty || jsonBody['items'][0]['contentDetails']['contentRating'].isEmpty) {
+    if (jsonBody['items'].isEmpty ||
+        jsonBody['items'][0]['contentDetails'].isEmpty ||
+        jsonBody['items'][0]['contentDetails']['contentRating'].isEmpty) {
       return false;
     }
 
@@ -123,7 +125,7 @@ class _YoutubeAppDemoState extends State<YoutubeAppDemo> {
 
   Future<String> getVideoUrl(String videoName) async {
     List<YouTubeVideo> videoResult = await uApi.search(videoName);
-    
+
     if (videoResult.isNotEmpty) {
       return videoResult[0].url;
     }
@@ -142,7 +144,7 @@ class _YoutubeAppDemoState extends State<YoutubeAppDemo> {
         print("currentVideoUrl is empty! Name: $currentVideoName");
         continue;
       }
-      
+
       //check if video is ok
       if (!await isVideoRestricted()) {
         break;
@@ -193,43 +195,63 @@ class _YoutubeAppDemoState extends State<YoutubeAppDemo> {
   // Rebuild every time something changes
   @override
   Widget build(BuildContext context) {
-    return YoutubePlayerScaffold(
-      controller: controller,
-      builder: (context, player) {
-        return Scaffold(
-          appBar: AppBar(title: const Text('Youtube Player IFrame Demo')),
-          body: LayoutBuilder(
-            builder: (context, constraints) {
-              if (kIsWeb && constraints.maxWidth > 750) {
-                return Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Expanded(
-                      flex: 2,
-                      child: Controls(
-                          nextVideo: nextVideo,
-                          addFavorite: addFavorite,
-                          addUnfavorite: addUnfavorite),
-                    ),
-                  ],
-                );
+    return SizedBox.expand(
+        child: GestureDetector(
+            onPanUpdate: (details) {
+              // Swipe in right
+              if (details.delta.dx > 0) {
+                print("RIGHT SWAP");
+                addFavorite();
+                //like
               }
 
-              return ListView(
-                children: [
-                  player,
-                  const VideoPositionIndicator(),
-                  Controls(
-                      nextVideo: nextVideo,
-                      addFavorite: addFavorite,
-                      addUnfavorite: addUnfavorite),
-                ],
-              );
+              // Swipe in left
+              if (details.delta.dx < 0) {
+                print("LEFT SWAP");
+                addUnfavorite();
+                //dislike
+              }
             },
-          ),
+            child: YoutubePlayerScaffold(
+              controller: controller,
+              builder: (context, player) {
+                return Scaffold(
+                  appBar:
+                      AppBar(title: const Text('Youtube Player IFrame Demo')),
+                  body: LayoutBuilder(
+                    builder: (context, constraints) {
+                      if (kIsWeb && constraints.maxWidth > 750) {
+                        return Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Expanded(
+                              flex: 2,
+                              child: Controls(
+                                  nextVideo: nextVideo,
+                                  addFavorite: addFavorite,
+                                  addUnfavorite: addUnfavorite),
+                            ),
+                          ],
+                        );
+                      }
+
+                      return ListView(
+                        children: [
+                          player,
+                          const VideoPositionIndicator(),
+                          Controls(
+                              nextVideo: nextVideo,
+                              addFavorite: addFavorite,
+                              addUnfavorite: addUnfavorite),
+                        ],
+                      );
+                    },
+                  ),
+                );
+              },
+            )
+          )
         );
-      },
-    );
   }
 
   @override
