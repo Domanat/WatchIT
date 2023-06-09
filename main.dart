@@ -17,10 +17,17 @@ import 'widgets/meta_data_section.dart';
 import 'widgets/play_pause_button_bar.dart';
 import 'widgets/player_state_section.dart';
 
-const String apiKey = "AIzaSyBFSeaJg5wolBnxH1Nxsa649cpalEBdpz4";
 const int videoNameRuIndex = 2;
+late String apiKey;
+void initApiKey() {
+  var path = "/storage/emulated/0/Download/ApiKey.txt";
+  List<String> lines = File(path).readAsLinesSync();
+  apiKey = lines[0];
+  debugPrint("debug: apiKey: $apiKey");
+}
 
 Future<void> main() async {
+  initApiKey();
   // Set loading screen before initialization
   WidgetsBinding widgetsBinding = WidgetsFlutterBinding.ensureInitialized();
   FlutterNativeSplash.preserve(widgetsBinding: widgetsBinding);
@@ -86,7 +93,7 @@ class _YoutubeAppDemoState extends State<YoutubeAppDemo> {
     bool isExists = File(path).existsSync();
     print(isExists);
     if (!isExists) {
-      print("Error! Path $path doesn't exists");
+      debugPrint("debug: Error! Path $path doesn't exists");
       throw Exception("NO VALID PATH");
     }
 
@@ -141,7 +148,7 @@ class _YoutubeAppDemoState extends State<YoutubeAppDemo> {
       currentVideoUrl = await getVideoUrl(currentVideoName);
 
       if (currentVideoUrl.isEmpty) {
-        print("currentVideoUrl is empty! Name: $currentVideoName");
+        debugPrint("debug: currentVideoUrl is empty! Name: $currentVideoName");
         continue;
       }
 
@@ -154,16 +161,16 @@ class _YoutubeAppDemoState extends State<YoutubeAppDemo> {
     controller.loadVideo(currentVideoUrl);
 
     setState(() {
-      print("Set new video");
+      debugPrint("debug: Set new video");
     });
   }
 
   void addFavorite() {
-    print("Video $currentVideoUrl favorite");
+    debugPrint("debug: Video $currentVideoUrl favorite");
   }
 
   void addUnfavorite() {
-    print("Video $currentVideoUrl unfavorite");
+    debugPrint("debug: Video $currentVideoUrl unfavorite");
   }
 
   Future<void> loadData() async {
@@ -200,15 +207,17 @@ class _YoutubeAppDemoState extends State<YoutubeAppDemo> {
             onPanUpdate: (details) {
               // Swipe in right
               if (details.delta.dx > 0) {
-                print("RIGHT SWAP");
+                debugPrint("debug: RIGHT SWAP");
                 addFavorite();
+                nextVideo();
                 //like
               }
 
               // Swipe in left
               if (details.delta.dx < 0) {
-                print("LEFT SWAP");
+                debugPrint("debug: LEFT SWAP");
                 addUnfavorite();
+                nextVideo();
                 //dislike
               }
             },
@@ -216,8 +225,7 @@ class _YoutubeAppDemoState extends State<YoutubeAppDemo> {
               controller: controller,
               builder: (context, player) {
                 return Scaffold(
-                  appBar:
-                      AppBar(title: const Text('Youtube Player IFrame Demo')),
+                  appBar: AppBar(title: const Text('Youtube Player IFrame Demo')),
                   body: LayoutBuilder(
                     builder: (context, constraints) {
                       if (kIsWeb && constraints.maxWidth > 750) {
@@ -249,9 +257,7 @@ class _YoutubeAppDemoState extends State<YoutubeAppDemo> {
                   ),
                 );
               },
-            )
-          )
-        );
+            )));
   }
 
   @override
