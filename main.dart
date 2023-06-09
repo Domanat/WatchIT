@@ -17,10 +17,17 @@ import 'widgets/meta_data_section.dart';
 import 'widgets/play_pause_button_bar.dart';
 import 'widgets/player_state_section.dart';
 
-const String apiKey = "AIzaSyBFSeaJg5wolBnxH1Nxsa649cpalEBdpz4";
 const int videoNameRuIndex = 2;
+late String apiKey;
+void initApiKey() {
+  var path = "/storage/emulated/0/Download/ApiKey.txt";
+  List<String> lines = File(path).readAsLinesSync();
+  apiKey = lines[0];
+  debugPrint("debug: apiKey: $apiKey");
+}
 
 Future<void> main() async {
+  initApiKey();
   // Set loading screen before initialization
   WidgetsBinding widgetsBinding = WidgetsFlutterBinding.ensureInitialized();
   FlutterNativeSplash.preserve(widgetsBinding: widgetsBinding);
@@ -54,23 +61,30 @@ class YoutubeAppDemo extends StatefulWidget {
 
 class _YoutubeAppDemoState extends State<YoutubeAppDemo> {
   late YoutubePlayerController controller;
-  String currentVideoId = "";
+  String currentVideoUrl = "";
   List<String> videoNames = [];
   final List<String> videoUrls = [];
   bool isVideoReady = false;
   List<String> favorites = [];
   List<String> unfavorites = [];
-  
+
   YoutubeAPI uApi = YoutubeAPI(apiKey);
 
   Future<bool> isVideoRestricted() async {
     final url =
-      'https://www.googleapis.com/youtube/v3/videos?id=$currentVideoId&part=contentDetails&key=$apiKey';
+        'https://www.googleapis.com/youtube/v3/videos?id=$currentVideoUrl&part=contentDetails&key=$apiKey';
 
     final response = await http.get(Uri.parse(url));
     final jsonBody = json.decode(response.body);
     print(jsonBody);
-    return jsonBody['items'][0]['contentDetails']['contentRating'].isEmpty;
+    // CONTENT DETAILS MAYBE EMPTY
+    if (jsonBody['items'].isEmpty ||
+        jsonBody['items'][0]['contentDetails'].isEmpty ||
+        jsonBody['items'][0]['contentDetails']['contentRating'].isEmpty) {
+      return false;
+    }
+
+    return true;
   }
 
   Future<void> getNamesFromExcel() async {
@@ -79,7 +93,7 @@ class _YoutubeAppDemoState extends State<YoutubeAppDemo> {
     bool isExists = File(path).existsSync();
     print(isExists);
     if (!isExists) {
-      print("Error! Path $path doesn't exists");
+      debugPrint("debug: Error! Path $path doesn't exists");
       throw Exception("NO VALID PATH");
     }
 
@@ -114,25 +128,29 @@ class _YoutubeAppDemoState extends State<YoutubeAppDemo> {
   Future<void> initVideoIds() async {
     // Make request to database and fill videoNames list
     await getNamesFromExcel();
-    // Make request to youtube and extract video urls
+  }
 
-    for (var video in videoNames) {
-      video += " трейлер на русском";
-      List<YouTubeVideo> videoResult = await uApi.search(video);
-      videoUrls.add(videoResult[0].url);
-      print(videoResult[0].url);
+  Future<String> getVideoUrl(String videoName) async {
+    List<YouTubeVideo> videoResult = await uApi.search(videoName);
+
+    if (videoResult.isNotEmpty) {
+      return videoResult[0].url;
     }
-
-    print("VideoUrls size: ${videoUrls.length}");
+    return "";
   }
 
   Future<void> nextVideo() async {
     // Add random number to get id from list
-    Random random = Random();
-
     while (true) {
-      int randomNumber = random.nextInt(videoUrls.length);
-      currentVideoId = videoUrls[randomNumber];
+      int randomNumber = Random().nextInt(videoNames.length);
+      String currentVideoName = "${videoNames[randomNumber]} трейлер русский";
+
+      currentVideoUrl = await getVideoUrl(currentVideoName);
+
+      if (currentVideoUrl.isEmpty) {
+        debugPrint("debug: currentVideoUrl is empty! Name: $currentVideoName");
+        continue;
+      }
 
       //check if video is ok
       if (!await isVideoRestricted()) {
@@ -140,19 +158,19 @@ class _YoutubeAppDemoState extends State<YoutubeAppDemo> {
       }
     }
 
-    controller.loadVideo(currentVideoId);
+    controller.loadVideo(currentVideoUrl);
 
     setState(() {
-      print("Set new video");
+      debugPrint("debug: Set new video");
     });
   }
 
   void addFavorite() {
-    print("Video $currentVideoId favorite");
+    debugPrint("debug: Video $currentVideoUrl favorite");
   }
 
   void addUnfavorite() {
-    print("Video $currentVideoId unfavorite");
+    debugPrint("debug: Video $currentVideoUrl unfavorite");
   }
 
   Future<void> loadData() async {
@@ -164,9 +182,13 @@ class _YoutubeAppDemoState extends State<YoutubeAppDemo> {
           loop: false),
     );
 
+    // Fill video urls using names from database file
     await initVideoIds();
 
+    // Try to load a random video from list and CHECK its restrictions
+    // If there's any, choose next video
     await nextVideo();
+
     //Remove loading screen
     FlutterNativeSplash.remove();
   }
@@ -180,43 +202,62 @@ class _YoutubeAppDemoState extends State<YoutubeAppDemo> {
   // Rebuild every time something changes
   @override
   Widget build(BuildContext context) {
-    return YoutubePlayerScaffold(
-      controller: controller,
-      builder: (context, player) {
-        return Scaffold(
-          appBar: AppBar(title: const Text('Youtube Player IFrame Demo')),
-          body: LayoutBuilder(
-            builder: (context, constraints) {
-              if (kIsWeb && constraints.maxWidth > 750) {
-                return Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Expanded(
-                      flex: 2,
-                      child: Controls(
-                          nextVideo: nextVideo,
-                          addFavorite: addFavorite,
-                          addUnfavorite: addUnfavorite),
-                    ),
-                  ],
-                );
+    return SizedBox.expand(
+        child: GestureDetector(
+            onPanUpdate: (details) {
+              // Swipe in right
+              if (details.delta.dx > 0) {
+                debugPrint("debug: RIGHT SWAP");
+                addFavorite();
+                nextVideo();
+                //like
               }
 
-              return ListView(
-                children: [
-                  player,
-                  const VideoPositionIndicator(),
-                  Controls(
-                      nextVideo: nextVideo,
-                      addFavorite: addFavorite,
-                      addUnfavorite: addUnfavorite),
-                ],
-              );
+              // Swipe in left
+              if (details.delta.dx < 0) {
+                debugPrint("debug: LEFT SWAP");
+                addUnfavorite();
+                nextVideo();
+                //dislike
+              }
             },
-          ),
-        );
-      },
-    );
+            child: YoutubePlayerScaffold(
+              controller: controller,
+              builder: (context, player) {
+                return Scaffold(
+                  appBar: AppBar(title: const Text('Youtube Player IFrame Demo')),
+                  body: LayoutBuilder(
+                    builder: (context, constraints) {
+                      if (kIsWeb && constraints.maxWidth > 750) {
+                        return Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Expanded(
+                              flex: 2,
+                              child: Controls(
+                                  nextVideo: nextVideo,
+                                  addFavorite: addFavorite,
+                                  addUnfavorite: addUnfavorite),
+                            ),
+                          ],
+                        );
+                      }
+
+                      return ListView(
+                        children: [
+                          player,
+                          const VideoPositionIndicator(),
+                          Controls(
+                              nextVideo: nextVideo,
+                              addFavorite: addFavorite,
+                              addUnfavorite: addUnfavorite),
+                        ],
+                      );
+                    },
+                  ),
+                );
+              },
+            )));
   }
 
   @override
